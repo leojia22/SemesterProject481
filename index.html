@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ES Futures Trade Simulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+  #header h1 { font-size: 15px; color: #58a6ff; letter-spacing: 1px; }
+  .price-badge {
+    display: flex; flex-direction: column; align-items: center;
+    background: #1c2128; border: 1px solid #30363d;
+    border-radius: 4px; padding: 4px 12px;
+  }
+  .price-badge .label { font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
+  .price-badge .value { font-size: 16px; font-weight: bold; }
+  #es-display { color: #f0f6fc; }
+  #spx-display { color: #79c0ff; }
+  #ts-display { font-size: 11px; color: #8b949e; margin-left: auto; }
+
+  /* ── Main layout ── */
+  #main {
+    display: grid;
+    grid-template-columns: 240px 1fr 280px;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── Panel base ── */
+  .panel {
+    border-right: 1px solid #21262d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+  .panel-title {
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+    padding: 6px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8b949e;
+    flex-shrink: 0;
+  }
+
+  /* ── Order Book ── */
+  #book-panel { background: #0d1117; }
+  #book-container {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #30363d #0d1117;
+  }
+  .book-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px 80px 1fr;
+    align-items: center;
+    padding: 1px 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+    min-height: 22px;
+    border-bottom: 1px solid #0d1117;
+  }
+  .book-row:hover { background: #1c2128; }
+  .book-row.ask { background: rgba(248, 81, 73, 0.04); }
+  .book-row.bid { background: rgba(63, 185, 80, 0.04); }
+  .book-row.ask:hover { background: rgba(248, 81, 73, 0.12); }
+  .book-row.bid:hover { background: rgba(63, 185, 80, 0.12); }
+  .book-row.mid-marker {
+    background: #1c2128;
+    border-top: 1px solid #388bfd;
+    border-bottom: 1px solid #388bfd;
+    cursor: default;
+    font-size: 10px; color: #58a6ff;
+    text-align: center;
+  }
+  .book-row.selected-row { outline: 2px solid #58a6ff; outline-offset: -1px; }
+
+  .book-qty-bar { display: flex; align-items: center; }
+  .ask .qty-bar-fill { background: rgba(248, 81, 73, 0.35); height: 14px; border-radius: 2px; }
+  .bid .qty-bar-fill { background: rgba(63, 185, 80, 0.35); height: 14px; border-radius: 2px; }
+  .book-price { text-align: center; font-weight: bold; font-size: 12px; }
+  .ask .book-price { color: #f85149; }
+  .bid .book-price { color: #3fb950; }
+  .book-qty { text-align: center; color: #8b949e; font-size: 11px; }
+  .book-delta { text-align: center; font-size: 10px; color: #56d364; }
+  .mid-spread { grid-column: 1 / -1; text-align: center; }
+
+  .book-header {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px 80px 1fr;
+    padding: 4px 8px;
+    border-bottom: 1px solid #21262d;
+    font-size: 9px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .book-header span { text-align: center; }
+  .book-header span:first-child { text-align: left; }
+  .book-header span:last-child { text-align: right; }
+
+  /* ── Left panel: Position & Trade ── */
+  #left-panel { background: #0d1117; }
+
+  #position-section {
+    padding: 12px;
+    border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
+  }
+  .pos-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid #161b22;
+  }
+  .pos-row .key { color: #8b949e; font-size: 11px; }
+  .pos-row .val { font-size: 12px; font-weight: bold; }
+  .pos-row .val.pos { color: #3fb950; }
+  .pos-row .val.neg { color: #f85149; }
+  .pos-row .val.neutral { color: #c9d1d9; }
+
+  #pnl-big {
+    text-align: center;
+    padding: 10px 0 6px;
+    font-size: 26px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  #pnl-big.pos { color: #3fb950; }
+  #pnl-big.neg { color: #f85149; }
+  #pnl-big.zero { color: #8b949e; }
+
+  #trade-section {
+    padding: 12px;
+    border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
+  }
+  .trade-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .trade-label { color: #8b949e; font-size: 10px; width: 60px; text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type=number] {
+    background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+    border-radius: 4px; padding: 5px 8px; font-family: inherit;
+    font-size: 12px; width: 90px; outline: none;
+  }
+  input[type=number]:focus { border-color: #58a6ff; }
+  .selected-price-display {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 4px; padding: 5px 8px; font-size: 12px;
+    flex: 1; color: #79c0ff; min-width: 80px;
+  }
+  .btn {
+    border: none; border-radius: 4px; padding: 8px 0;
+    font-family: inherit; font-size: 12px; font-weight: bold;
+    cursor: pointer; flex: 1; letter-spacing: 0.5px;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.8; }
+  .btn:active { opacity: 0.6; }
+  .btn-buy  { background: #3fb950; color: #0d1117; }
+  .btn-sell { background: #f85149; color: #fff; }
+  .btn-close { background: #58a6ff; color: #0d1117; }
+  .btn-close:disabled { background: #21262d; color: #8b949e; cursor: not-allowed; opacity: 1; }
+
+  #trade-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #30363d #0d1117;
+  }
+  .log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid #161b22;
+    font-size: 10px;
+    color: #8b949e;
+    display: flex;
+    justify-content: space-between;
+  }
+  .log-entry .lside { color: #3fb950; }
+  .log-entry .lside.sell { color: #f85149; }
+
+  /* ── Right panel: Greeks + Chart ── */
+  #right-panel { background: #0d1117; }
+  #greeks-section {
+    padding: 12px;
+    border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
+  }
+  .greek-row {
+    display: grid; grid-template-columns: 90px 1fr 1fr;
+    padding: 3px 0; border-bottom: 1px solid #161b22;
+    font-size: 11px;
+  }
+  .greek-row .gname { color: #8b949e; }
+  .greek-row .gcall { color: #79c0ff; text-align: right; }
+  .greek-row .gput  { color: #d2a8ff; text-align: right; }
+  .greeks-header {
+    display: grid; grid-template-columns: 90px 1fr 1fr;
+    padding: 2px 0 4px;
+    font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d; margin-bottom: 4px;
+  }
+  .greeks-header span:not(:first-child) { text-align: right; }
+
+  #chart-section {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #price-chart {
+    flex: 1;
+    width: 100%;
+    border-radius: 4px;
+    min-height: 120px;
+  }
+
+  /* ── Bottom: Replay Controls ── */
+  #controls {
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .ctrl-btn {
+    background: #21262d; border: 1px solid #30363d;
+    color: #c9d1d9; border-radius: 4px;
+    padding: 5px 10px; cursor: pointer; font-family: inherit; font-size: 13px;
+    transition: background 0.15s;
+  }
+  .ctrl-btn:hover { background: #30363d; }
+  .ctrl-btn.active { background: #388bfd; color: #fff; border-color: #388bfd; }
+  #timeline {
+    flex: 1;
+    accent-color: #388bfd;
+    cursor: pointer;
+  }
+  #snap-counter { font-size: 11px; color: #8b949e; min-width: 100px; text-align: right; }
+  .speed-label { font-size: 10px; color: #8b949e; }
+  select {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    border-radius: 4px; padding: 4px 6px; font-family: inherit; font-size: 12px; outline: none;
+  }
+  select:focus { border-color: #58a6ff; }
+
+  /* scrollbar styling */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #0d1117; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div id="header">
+  <h1>⚡ ES Futures Trade Simulator</h1>
+  <div class="price-badge">
+    <span class="label">ES Futures</span>
+    <span class="value" id="es-display">—</span>
+  </div>
+  <div class="price-badge">
+    <span class="label">SPX Spot</span>
+    <span class="value" id="spx-display">—</span>
+  </div>
+  <div class="price-badge">
+    <span class="label">Spread</span>
+    <span class="value" id="spread-display" style="color:#e3b341;">—</span>
+  </div>
+  <div id="ts-display">—</div>
+</div>
+
+<!-- ── MAIN ── -->
+<div id="main">
+
+  <!-- LEFT: Position + Trade -->
+  <div class="panel" id="left-panel">
+    <div class="panel-title">Position &amp; P&amp;L</div>
+    <div id="position-section">
+      <div id="pnl-big" class="zero">$0.00</div>
+      <div class="pos-row"><span class="key">Contracts</span><span class="val neutral" id="pos-qty">0</span></div>
+      <div class="pos-row"><span class="key">Avg Entry</span><span class="val neutral" id="pos-entry">—</span></div>
+      <div class="pos-row"><span class="key">Mark Price</span><span class="val neutral" id="pos-mark">—</span></div>
+      <div class="pos-row"><span class="key">Unrealized</span><span class="val neutral" id="pos-unreal">$0.00</span></div>
+      <div class="pos-row"><span class="key">Realized</span><span class="val neutral" id="pos-real">$0.00</span></div>
+    </div>
+
+    <div class="panel-title" style="margin-top:0;">Trade</div>
+    <div id="trade-section">
+      <div class="trade-row">
+        <span class="trade-label">Price</span>
+        <div class="selected-price-display" id="selected-price">click order book</div>
+      </div>
+      <div class="trade-row">
+        <span class="trade-label">Qty</span>
+        <input type="number" id="trade-qty" value="1" min="1" max="100">
+        <span style="font-size:10px;color:#8b949e;">contracts</span>
+      </div>
+      <div class="trade-row" style="gap:6px;">
+        <button class="btn btn-buy"  onclick="executeTrade('buy')">▲ BUY</button>
+        <button class="btn btn-sell" onclick="executeTrade('sell')">▼ SELL</button>
+      </div>
+      <div class="trade-row">
+        <button class="btn btn-close" id="close-btn" onclick="closePosition()" disabled>✕ Close Position</button>
+      </div>
+      <div style="font-size:10px;color:#8b949e;margin-top:4px;">
+        1 contract = $50/pt · Click a row to select price
+      </div>
+    </div>
+
+    <div class="panel-title">Trade Log</div>
+    <div id="trade-log"></div>
+  </div>
+
+  <!-- CENTER: Order Book -->
+  <div class="panel" id="book-panel">
+    <div class="panel-title">Order Book — ES Futures</div>
+    <div class="book-header">
+      <span>Bid Qty</span>
+      <span>Bid δ</span>
+      <span>Price</span>
+      <span>Ask δ</span>
+      <span style="text-align:right;">Ask Qty</span>
+    </div>
+    <div id="book-container">
+      <div id="book-rows"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Greeks + Chart -->
+  <div class="panel" id="right-panel">
+    <div class="panel-title">Option Greeks <span id="greeks-strike" style="color:#58a6ff;margin-left:4px;"></span></div>
+    <div id="greeks-section">
+      <div class="greeks-header">
+        <span>Greek</span><span>Call</span><span>Put</span>
+      </div>
+      <div class="greek-row"><span class="gname">Delta</span><span class="gcall" id="g-cd">—</span><span class="gput" id="g-pd">—</span></div>
+      <div class="greek-row"><span class="gname">Gamma</span><span class="gcall" id="g-cg">—</span><span class="gput" id="g-pg">—</span></div>
+      <div class="greek-row"><span class="gname">Theta</span><span class="gcall" id="g-ct">—</span><span class="gput" id="g-pt">—</span></div>
+      <div class="greek-row"><span class="gname">Vega</span><span class="gcall" id="g-cv">—</span><span class="gput" id="g-pv">—</span></div>
+    </div>
+
+    <div class="panel-title">ES Price History</div>
+    <div id="chart-section">
+      <canvas id="price-chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONTROLS ── -->
+<div id="controls">
+  <button class="ctrl-btn" id="btn-prev" onclick="stepBy(-1)">◀</button>
+  <button class="ctrl-btn" id="btn-play" onclick="togglePlay()">▶ Play</button>
+  <button class="ctrl-btn" id="btn-next" onclick="stepBy(1)">▶</button>
+  <input type="range" id="timeline" min="0" max="0" value="0" oninput="seekTo(+this.value)">
+  <span class="speed-label">Speed:</span>
+  <select id="speed-select">
+    <option value="500">0.5×</option>
+    <option value="250" selected>1×</option>
+    <option value="100">2×</option>
+    <option value="50">5×</option>
+    <option value="16">10×</option>
+  </select>
+  <span id="snap-counter">0 / 0</span>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────
+let totalSnaps = 0;
+let currentIdx = 0;
+let currentSnap = null;
+let allPrices = [];
+let selectedPrice = null;
+let selectedSide = null; // 'ask' or 'bid'
+
+let position = 0;         // net contracts (+long, -short)
+let avgEntry = 0;
+let realizedPnl = 0;
+let trades = [];
+
+let playTimer = null;
+let isPlaying = false;
+
+// Chart state
+let chartPrices = [];
+let chartCurrentIdx = 0;
+
+// ─────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────
+async function init() {
+  const meta = await fetch('/api/meta').then(r => r.json());
+  totalSnaps = meta.total;
+
+  document.getElementById('timeline').max = totalSnaps - 1;
+  document.getElementById('snap-counter').textContent = `0 / ${totalSnaps - 1}`;
+
+  // Load all prices for chart (background)
+  fetch('/api/prices').then(r => r.json()).then(d => {
+    allPrices = d.prices;
+    drawChart();
+  });
+
+  await loadSnap(0);
+}
+
+// ─────────────────────────────────────────────────────
+// Data loading
+// ─────────────────────────────────────────────────────
+async function loadSnap(idx) {
+  const data = await fetch(`/api/snapshot?idx=${idx}`).then(r => r.json());
+  currentIdx = data.idx;
+  currentSnap = data;
+
+  document.getElementById('timeline').value = currentIdx;
+  document.getElementById('snap-counter').textContent = `${currentIdx} / ${totalSnaps - 1}`;
+
+  // Header prices — use mid price from live order book
+  const markPrice = data.mid_price || data.es_price;
+  const spxPrice = data.spx_price;
+  document.getElementById('es-display').textContent = markPrice.toFixed(4);
+  document.getElementById('spx-display').textContent = spxPrice.toFixed(2);
+
+  const spread = data.best_ask != null ? (data.best_ask - data.best_bid).toFixed(2) : '—';
+  document.getElementById('spread-display').textContent = spread;
+  document.getElementById('ts-display').textContent = formatTs(data.timestamp);
+
+  renderBook(data);
+  updateGreeks(data);
+  updatePnl(markPrice);
+  updateChartLine(currentIdx);
+}
+
+function formatTs(ts) {
+  // "2025-04-22 15:47:00.237904-04:00" → "2025-04-22  15:47:00"
+  return ts.replace('T', ' ').split('.')[0].slice(0, 19).replace(' ', '  ');
+}
+
+// ─────────────────────────────────────────────────────
+// Order Book Rendering
+// ─────────────────────────────────────────────────────
+function renderBook(data) {
+  const container = document.getElementById('book-rows');
+  const asks = data.asks.slice(0, 30);   // lowest 30 ask prices
+  const bids = data.bids.slice(0, 30);   // highest 30 bid prices
+
+  const maxQty = Math.max(
+    ...asks.map(a => a.q),
+    ...bids.map(b => b.q),
+    1
+  );
+
+  let html = '';
+
+  // Ask side: show top 20 asks in REVERSE order (highest first at top, lowest near mid)
+  const askDisplay = asks.slice(0, 20).reverse();
+  for (const row of askDisplay) {
+    const barW = Math.round((row.q / maxQty) * 70);
+    const deltaStr = row.cd ? row.cd.toFixed(3) : '—';
+    html += `
+      <div class="book-row ask${selectedPrice === row.s && selectedSide === 'ask' ? ' selected-row' : ''}"
+           onclick="selectPrice(${row.s}, 'ask')">
+        <div class="book-qty-bar" style="justify-content:flex-start;"></div>
+        <div class="book-delta">${deltaStr}</div>
+        <div class="book-price">${row.s.toFixed(2)}</div>
+        <div class="book-qty">${row.q}</div>
+        <div class="book-qty-bar" style="justify-content:flex-start;">
+          <div class="qty-bar-fill" style="width:${barW}px;"></div>
+        </div>
+      </div>`;
+  }
+
+  // Mid marker
+  const bestBid = bids[0] ? bids[0].s : 0;
+  const bestAsk = asks[0] ? asks[0].s : 0;
+  const mid = bestAsk && bestBid ? ((bestBid + bestAsk) / 2).toFixed(2) : '—';
+  const spreadTicks = bestAsk && bestBid ? ((bestAsk - bestBid) / 0.25).toFixed(0) : '—';
+  html += `<div class="book-row mid-marker"><span class="mid-spread">── MID ${mid}  ·  ${spreadTicks} ticks ──</span></div>`;
+
+  // Bid side: top 20 bids descending (highest at top)
+  for (const row of bids.slice(0, 20)) {
+    const barW = Math.round((row.q / maxQty) * 70);
+    const deltaStr = row.pd ? row.pd.toFixed(3) : '—';
+    html += `
+      <div class="book-row bid${selectedPrice === row.s && selectedSide === 'bid' ? ' selected-row' : ''}"
+           onclick="selectPrice(${row.s}, 'bid')">
+        <div class="book-qty-bar" style="justify-content:flex-end;">
+          <div class="qty-bar-fill" style="width:${barW}px;"></div>
+        </div>
+        <div class="book-qty">${row.q}</div>
+        <div class="book-price">${row.s.toFixed(2)}</div>
+        <div class="book-delta">${deltaStr}</div>
+        <div class="book-qty-bar" style="justify-content:flex-end;"></div>
+      </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function selectPrice(price, side) {
+  selectedPrice = price;
+  selectedSide = side;
+  document.getElementById('selected-price').textContent = price.toFixed(2) + (side === 'ask' ? ' (Ask)' : ' (Bid)');
+  // Re-render to show selection highlight
+  if (currentSnap) renderBook(currentSnap);
+}
+
+// ─────────────────────────────────────────────────────
+// Greeks
+// ─────────────────────────────────────────────────────
+function updateGreeks(data) {
+  // Use ATM ask row (first ask closest to ES price)
+  const esPrice = data.es_price;
+  let best = null;
+  let bestDist = Infinity;
+
+  for (const row of data.asks) {
+    const d = Math.abs(row.s - esPrice);
+    if (d < bestDist) { bestDist = d; best = row; }
+  }
+
+  if (best) {
+    document.getElementById('greeks-strike').textContent = `@ ${best.s.toFixed(2)}`;
+    document.getElementById('g-cd').textContent = best.cd.toFixed(4);
+    document.getElementById('g-cg').textContent = best.cg.toFixed(6);
+    document.getElementById('g-ct').textContent = best.ct.toFixed(4);
+    document.getElementById('g-cv').textContent = best.cv.toFixed(4);
+    document.getElementById('g-pd').textContent = best.pd.toFixed(4);
+    // put gamma same as call gamma (model symmetry)
+    document.getElementById('g-pg').textContent = best.cg.toFixed(6);
+    document.getElementById('g-pt').textContent = best.pt.toFixed(4);
+    document.getElementById('g-pv').textContent = best.pv.toFixed(4);
+  }
+}
+
+// ─────────────────────────────────────────────────────
+// Trading
+// ─────────────────────────────────────────────────────
+function executeTrade(dir) {
+  if (!currentSnap) return;
+
+  const qty = parseInt(document.getElementById('trade-qty').value, 10) || 1;
+  let price = selectedPrice;
+
+  if (!price) {
+    // Default to best ask/bid
+    if (dir === 'buy' && currentSnap.asks.length) price = currentSnap.asks[0].s;
+    else if (dir === 'sell' && currentSnap.bids.length) price = currentSnap.bids[0].s;
+  }
+
+  if (!price) { alert('Select a price level first.'); return; }
+
+  const contracts = dir === 'buy' ? +qty : -qty;
+
+  if (position === 0) {
+    avgEntry = price;
+    position = contracts;
+  } else {
+    const newPos = position + contracts;
+    if (newPos === 0) {
+      // Fully closing
+      const pnl = (price - avgEntry) * position * 50;
+      realizedPnl += pnl;
+      position = 0;
+      avgEntry = 0;
+    } else if (Math.sign(newPos) !== Math.sign(position)) {
+      // Flip position
+      const closePnl = (price - avgEntry) * position * 50;
+      realizedPnl += closePnl;
+      avgEntry = price;
+      position = newPos;
+    } else {
+      // Adding to position
+      avgEntry = (avgEntry * Math.abs(position) + price * Math.abs(contracts)) / (Math.abs(position) + Math.abs(contracts));
+      position = newPos;
+    }
+  }
+
+  trades.push({ dir, qty, price, ts: currentSnap.timestamp });
+  logTrade(dir, qty, price);
+  updatePnl(currentSnap.es_price);
+  document.getElementById('close-btn').disabled = (position === 0);
+}
+
+function closePosition() {
+  if (position === 0) return;
+  const dir = position > 0 ? 'sell' : 'buy';
+  const qty = Math.abs(position);
+  const price = dir === 'sell'
+    ? (currentSnap.bids[0] ? currentSnap.bids[0].s : currentSnap.mid_price)
+    : (currentSnap.asks[0] ? currentSnap.asks[0].s : currentSnap.mid_price);
+
+  const pnl = (price - avgEntry) * position * 50;
+  realizedPnl += pnl;
+  logTrade(dir, qty, price, true);
+  position = 0;
+  avgEntry = 0;
+  updatePnl(price);
+  document.getElementById('close-btn').disabled = true;
+}
+
+function updatePnl(markPrice) {
+  const unrealized = position !== 0 ? (markPrice - avgEntry) * position * 50 : 0;
+  const totalPnl = realizedPnl + unrealized;
+
+  const fmt = v => (v >= 0 ? '+' : '') + '$' + Math.abs(v).toFixed(2);
+  const cls = v => v > 0 ? 'pos' : v < 0 ? 'neg' : 'neutral';
+
+  const pnlEl = document.getElementById('pnl-big');
+  pnlEl.textContent = fmt(totalPnl);
+  pnlEl.className = totalPnl > 0 ? 'pos' : totalPnl < 0 ? 'neg' : 'zero';
+
+  document.getElementById('pos-qty').textContent = position > 0 ? `+${position} L` : position < 0 ? `${position} S` : '0';
+  document.getElementById('pos-qty').className = 'val ' + (position > 0 ? 'pos' : position < 0 ? 'neg' : 'neutral');
+  document.getElementById('pos-entry').textContent = position !== 0 ? avgEntry.toFixed(2) : '—';
+  document.getElementById('pos-mark').textContent = markPrice.toFixed(2);
+
+  const unrEl = document.getElementById('pos-unreal');
+  unrEl.textContent = fmt(unrealized);
+  unrEl.className = 'val ' + cls(unrealized);
+
+  const rEl = document.getElementById('pos-real');
+  rEl.textContent = fmt(realizedPnl);
+  rEl.className = 'val ' + cls(realizedPnl);
+}
+
+function logTrade(dir, qty, price, isClose) {
+  const log = document.getElementById('trade-log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const time = currentSnap ? formatTs(currentSnap.timestamp).split('  ')[1] : '';
+  entry.innerHTML = `
+    <span class="lside ${dir === 'sell' ? 'sell' : ''}">${dir.toUpperCase()} ${qty}</span>
+    <span>@ ${price.toFixed(2)}</span>
+    <span style="color:#8b949e;">${time}${isClose ? ' CLO' : ''}</span>`;
+  log.insertBefore(entry, log.firstChild);
+}
+
+// ─────────────────────────────────────────────────────
+// Chart
+// ─────────────────────────────────────────────────────
+let chartCanvas, chartCtx;
+
+function drawChart() {
+  chartCanvas = document.getElementById('price-chart');
+  chartCtx = chartCanvas.getContext('2d');
+  renderChart();
+}
+
+function renderChart() {
+  if (!chartCtx || allPrices.length === 0) return;
+
+  const canvas = chartCanvas;
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = chartCtx;
+  const prices = allPrices;
+  const n = prices.length;
+  if (n === 0) return;
+
+  const min = Math.min(...prices) - 0.5;
+  const max = Math.max(...prices) + 0.5;
+  const pad = { t: 10, b: 20, l: 8, r: 8 };
+
+  const xScale = i => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
+  const yScale = p => pad.t + (1 - (p - min) / (max - min)) * (H - pad.t - pad.b);
+
+  // Background grid
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  const gridLines = 4;
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = pad.t + (i / gridLines) * (H - pad.t - pad.b);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(W - pad.r, y);
+    ctx.stroke();
+    const val = max - (i / gridLines) * (max - min);
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '9px Courier New';
+    ctx.fillText(val.toFixed(1), pad.l, y - 2);
+  }
+
+  // Price line
+  ctx.beginPath();
+  ctx.strokeStyle = '#388bfd';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#388bfd';
+  ctx.shadowBlur = 4;
+  for (let i = 0; i < n; i++) {
+    const x = xScale(i);
+    const y = yScale(prices[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Current position line
+  if (n > 0) {
+    const cx = xScale(currentIdx);
+    ctx.beginPath();
+    ctx.strokeStyle = '#f0f6fc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.moveTo(cx, pad.t);
+    ctx.lineTo(cx, H - pad.b);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Entry price line (if in position)
+  if (position !== 0) {
+    const ey = yScale(avgEntry);
+    ctx.beginPath();
+    ctx.strokeStyle = '#e3b341';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(pad.l, ey);
+    ctx.lineTo(W - pad.r, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e3b341';
+    ctx.font = '9px Courier New';
+    ctx.fillText('entry ' + avgEntry.toFixed(2), pad.l + 2, ey - 3);
+  }
+}
+
+function updateChartLine(idx) {
+  chartCurrentIdx = idx;
+  renderChart();
+}
+
+// ─────────────────────────────────────────────────────
+// Replay Controls
+// ─────────────────────────────────────────────────────
+function stepBy(delta) {
+  const next = Math.max(0, Math.min(currentIdx + delta, totalSnaps - 1));
+  loadSnap(next);
+}
+
+function seekTo(idx) {
+  loadSnap(idx);
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  const btn = document.getElementById('btn-play');
+  if (isPlaying) {
+    btn.textContent = '⏸ Pause';
+    btn.classList.add('active');
+    playLoop();
+  } else {
+    btn.textContent = '▶ Play';
+    btn.classList.remove('active');
+    clearTimeout(playTimer);
+  }
+}
+
+function playLoop() {
+  if (!isPlaying) return;
+  const speed = parseInt(document.getElementById('speed-select').value, 10);
+
+  if (currentIdx >= totalSnaps - 1) {
+    togglePlay();
+    return;
+  }
+
+  loadSnap(currentIdx + 1).then(() => {
+    playTimer = setTimeout(playLoop, speed);
+  });
+}
+
+// Handle window resize for chart
+window.addEventListener('resize', () => renderChart());
+
+// ─────────────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
