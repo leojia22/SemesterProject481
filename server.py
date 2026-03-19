@@ -8,7 +8,7 @@ import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'fixed_output.csv')
+CSV_PATH = os.path.join(os.path.dirname(__file__), 'data', '4-22_15:47.csv')
 PORT = 8080
 
 def load_data():
@@ -48,11 +48,11 @@ def load_data():
 
             # Parse MBO quantity (MBO_1 is the top-of-book size)
             qty = 0.0
-            for k in ['MBO_1', 'MBO_2', 'MBO_3']:
-                v = row.get(k, '').strip()
-                if v:
+            mbo_raw = row.get('MBO', '').strip().strip('[]')
+            if mbo_raw:
+                for val in mbo_raw.split(','):
                     try:
-                        qty += float(v)
+                        qty += float(val.strip())
                     except ValueError:
                         pass
 
