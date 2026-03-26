@@ -277,9 +277,34 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: #0d1117; }
   ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  /* ── Trade Verdict Toast ── */
+  #trade-verdict {
+    position: fixed;
+    top: 64px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 200;
+  }
+  #trade-verdict.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #trade-verdict.profit { background: rgba(63, 185, 80, 0.93); color: #0d1117; border: 1px solid #3fb950; }
+  #trade-verdict.loss   { background: rgba(248, 81, 73, 0.93);  color: #fff;    border: 1px solid #f85149; }
 </style>
 </head>
 <body>
+
+<div id="trade-verdict"></div>
 
 <!-- ── HEADER ── -->
 <div id="header">
@@ -592,12 +617,14 @@ function executeTrade(dir) {
       // Fully closing
       const pnl = (price - avgEntry) * position * 50;
       realizedPnl += pnl;
+      showVerdict(pnl);
       position = 0;
       avgEntry = 0;
     } else if (Math.sign(newPos) !== Math.sign(position)) {
       // Flip position
       const closePnl = (price - avgEntry) * position * 50;
       realizedPnl += closePnl;
+      showVerdict(closePnl);
       avgEntry = price;
       position = newPos;
     } else {
@@ -608,7 +635,7 @@ function executeTrade(dir) {
   }
 
   trades.push({ dir, qty, price, ts: currentSnap.timestamp });
-  logTrade(dir, qty, price);
+  logTrade(dir, qty, price, null);
   updatePnl(currentSnap.es_price);
   document.getElementById('close-btn').disabled = (position === 0);
 }
@@ -623,7 +650,8 @@ function closePosition() {
 
   const pnl = (price - avgEntry) * position * 50;
   realizedPnl += pnl;
-  logTrade(dir, qty, price, true);
+  showVerdict(pnl);
+  logTrade(dir, qty, price, pnl);
   position = 0;
   avgEntry = 0;
   updatePnl(price);
@@ -655,16 +683,34 @@ function updatePnl(markPrice) {
   rEl.className = 'val ' + cls(realizedPnl);
 }
 
-function logTrade(dir, qty, price, isClose) {
+function logTrade(dir, qty, price, pnl) {
   const log = document.getElementById('trade-log');
   const entry = document.createElement('div');
   entry.className = 'log-entry';
   const time = currentSnap ? formatTs(currentSnap.timestamp).split('  ')[1] : '';
+  const isClose = pnl !== null;
+  let pnlHtml = '';
+  if (isClose) {
+    const pnlColor = pnl >= 0 ? '#3fb950' : '#f85149';
+    const pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+    pnlHtml = ` <span style="color:${pnlColor};font-weight:bold;">${pnlStr}</span>`;
+  }
   entry.innerHTML = `
-    <span class="lside ${dir === 'sell' ? 'sell' : ''}">${dir.toUpperCase()} ${qty}</span>
-    <span>@ ${price.toFixed(2)}</span>
-    <span style="color:#8b949e;">${time}${isClose ? ' CLO' : ''}</span>`;
+    <span class="lside ${dir === 'sell' ? 'sell' : ''}">${dir.toUpperCase()} ${qty}${isClose ? ' CLO' : ''}</span>
+    <span>@ ${price.toFixed(2)}${pnlHtml}</span>
+    <span style="color:#8b949e;">${time}</span>`;
   log.insertBefore(entry, log.firstChild);
+}
+
+function showVerdict(pnl) {
+  const el = document.getElementById('trade-verdict');
+  const isProfit = pnl >= 0;
+  el.className = isProfit ? 'show profit' : 'show loss';
+  el.textContent = isProfit
+    ? '✓ GOOD TRADE  +$' + pnl.toFixed(2)
+    : '✗ BAD TRADE  -$' + Math.abs(pnl).toFixed(2);
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, 2500);
 }
 
 // ─────────────────────────────────────────────────────
