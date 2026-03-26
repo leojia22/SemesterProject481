@@ -309,6 +309,10 @@
 <!-- ── HEADER ── -->
 <div id="header">
   <h1>⚡ ES Futures Trade Simulator</h1>
+  <div class="price-badge" style="flex-direction:row;align-items:center;gap:8px;padding:4px 10px;">
+    <span class="label" style="margin:0;">Level:</span>
+    <select id="level-select" onchange="switchLevel(this.value)" style="background:#0d1117;border:1px solid #388bfd;color:#58a6ff;font-size:12px;padding:3px 6px;border-radius:4px;font-family:inherit;"></select>
+  </div>
   <div class="price-badge">
     <span class="label">ES Futures</span>
     <span class="value" id="es-display">—</span>
@@ -422,6 +426,7 @@
 // ─────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────
+let currentLevel = '';
 let totalSnaps = 0;
 let currentIdx = 0;
 let currentSnap = null;
@@ -445,14 +450,43 @@ let chartCurrentIdx = 0;
 // Init
 // ─────────────────────────────────────────────────────
 async function init() {
-  const meta = await fetch('/api/meta').then(r => r.json());
+  const levelsData = await fetch('/api/levels').then(r => r.json());
+  const levels = levelsData.levels;
+
+  const sel = document.getElementById('level-select');
+  sel.innerHTML = levels.map(l => `<option value="${l}">${l}</option>`).join('');
+  currentLevel = levels[0] || '';
+
+  await loadLevel(currentLevel);
+}
+
+async function switchLevel(level) {
+  if (isPlaying) togglePlay();
+  currentLevel = level;
+
+  // Reset trading state
+  position = 0;
+  avgEntry = 0;
+  realizedPnl = 0;
+  trades = [];
+  selectedPrice = null;
+  selectedSide = null;
+  document.getElementById('trade-log').innerHTML = '';
+  document.getElementById('close-btn').disabled = true;
+  document.getElementById('selected-price').textContent = 'click order book';
+
+  await loadLevel(currentLevel);
+}
+
+async function loadLevel(level) {
+  const meta = await fetch(`/api/meta?level=${encodeURIComponent(level)}`).then(r => r.json());
   totalSnaps = meta.total;
 
   document.getElementById('timeline').max = totalSnaps - 1;
   document.getElementById('snap-counter').textContent = `0 / ${totalSnaps - 1}`;
 
-  // Load all prices for chart (background)
-  fetch('/api/prices').then(r => r.json()).then(d => {
+  allPrices = [];
+  fetch(`/api/prices?level=${encodeURIComponent(level)}`).then(r => r.json()).then(d => {
     allPrices = d.prices;
     drawChart();
   });
@@ -464,7 +498,7 @@ async function init() {
 // Data loading
 // ─────────────────────────────────────────────────────
 async function loadSnap(idx) {
-  const data = await fetch(`/api/snapshot?idx=${idx}`).then(r => r.json());
+  const data = await fetch(`/api/snapshot?idx=${idx}&level=${encodeURIComponent(currentLevel)}`).then(r => r.json());
   currentIdx = data.idx;
   currentSnap = data;
 

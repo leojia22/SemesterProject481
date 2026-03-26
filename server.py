@@ -8,15 +8,15 @@ import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), 'data', '4-22_15:47.csv')
-PORT = 8080
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+PORT = 8081
 
-def load_data():
-    print(f"Loading {CSV_PATH} ...", flush=True)
+def load_data(csv_path):
+    print(f"Loading {csv_path} ...", flush=True)
     snapshots = []       # list of snapshot dicts, indexed by integer
     ts_index = {}        # timestamp -> snapshot index
 
-    with open(CSV_PATH, newline='') as f:
+    with open(csv_path, newline='') as f:
         reader = csv.DictReader(f)
         for row in reader:
             ts = row['timestamp']
@@ -91,28 +91,37 @@ def load_data():
 
 
 class Handler(BaseHTTPRequestHandler):
-    snapshots = []
+    all_levels = {}   # level_name -> snapshots list
+    level_names = []  # ordered list of level names
+
+    def _get_snapshots(self, qs):
+        level = qs.get('level', [self.level_names[0]])[0] if self.level_names else None
+        return self.all_levels.get(level, self.all_levels.get(self.level_names[0], []))
 
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        qs = parse_qs(parsed.query)
 
         if path == '/' or path == '/index.html':
             self._serve_static('index.html', 'text/html; charset=utf-8')
+        elif path == '/api/levels':
+            self._json({'levels': self.level_names})
         elif path == '/api/meta':
+            snapshots = self._get_snapshots(qs)
             self._json({
-                'total': len(self.snapshots),
-                'first_ts': self.snapshots[0]['timestamp'] if self.snapshots else '',
-                'last_ts': self.snapshots[-1]['timestamp'] if self.snapshots else '',
+                'total': len(snapshots),
+                'first_ts': snapshots[0]['timestamp'] if snapshots else '',
+                'last_ts': snapshots[-1]['timestamp'] if snapshots else '',
             })
         elif path == '/api/snapshot':
-            qs = parse_qs(parsed.query)
+            snapshots = self._get_snapshots(qs)
             try:
                 idx = int(qs.get('idx', ['0'])[0])
             except (ValueError, IndexError):
                 idx = 0
-            idx = max(0, min(idx, len(self.snapshots) - 1))
-            snap = self.snapshots[idx]
+            idx = max(0, min(idx, len(snapshots) - 1))
+            snap = snapshots[idx]
 
             # Compute live mid price from order book
             best_bid = snap['bids'][0]['s'] if snap['bids'] else snap['es_price']
@@ -131,6 +140,7 @@ class Handler(BaseHTTPRequestHandler):
                 'bids': snap['bids'][:40],
             })
         elif path == '/api/prices':
+            snapshots = self._get_snapshots(qs)
             # Return mid price (from order book) for all snapshots (for chart)
             def mid(s):
                 bb = s['bids'][0]['s'] if s['bids'] else s['es_price']
@@ -138,8 +148,8 @@ class Handler(BaseHTTPRequestHandler):
                 return round((bb + ba) / 2, 4)
 
             self._json({
-                'prices': [mid(s) for s in self.snapshots],
-                'timestamps': [s['timestamp'] for s in self.snapshots],
+                'prices': [mid(s) for s in snapshots],
+                'timestamps': [s['timestamp'] for s in snapshots],
             })
         else:
             self.send_response(404)
@@ -172,8 +182,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    snapshots = load_data()
-    Handler.snapshots = snapshots
+    csv_files = sorted(f for f in os.listdir(DATA_DIR) if f.endswith('.csv'))
+    for fname in csv_files:
+        name = fname[:-4]  # strip .csv
+        Handler.all_levels[name] = load_data(os.path.join(DATA_DIR, fname))
+        Handler.level_names.append(name)
 
     server = HTTPServer(('localhost', PORT), Handler)
     print(f"\n  Trade Simulator running → http://localhost:{PORT}\n", flush=True)
