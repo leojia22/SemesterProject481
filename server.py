@@ -70,9 +70,18 @@ def load_data(csv_path):
                 'cg': safe_float('call_gamma'),
                 'ct': safe_float('call_theta'),
                 'cv': safe_float('call_vega'),
+                'cch': safe_float('call_charm'),
+                'cr': safe_float('call_rho'),
+                'cva': safe_float('call_vanna'),
+                'cvo': safe_float('call_vomma'),
                 'pd': safe_float('put_delta'),
+                'pg': safe_float('put_gamma'),
                 'pt': safe_float('put_theta'),
                 'pv': safe_float('put_vega'),
+                'pch': safe_float('put_charm'),
+                'pr': safe_float('put_rho'),
+                'pva': safe_float('put_vanna'),
+                'pvo': safe_float('put_vomma'),
             }
 
             side = row.get('Side', '')

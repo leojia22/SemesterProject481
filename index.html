@@ -82,7 +82,7 @@
     padding: 1px 8px;
     cursor: pointer;
     transition: background 0.1s;
-    min-height: 22px;
+    min-height: 30px;
     border-bottom: 1px solid #0d1117;
   }
   .book-row:hover { background: #1c2128; }
@@ -300,11 +300,114 @@
   }
   #trade-verdict.profit { background: rgba(63, 185, 80, 0.93); color: #0d1117; border: 1px solid #3fb950; }
   #trade-verdict.loss   { background: rgba(248, 81, 73, 0.93);  color: #fff;    border: 1px solid #f85149; }
+
+  /* ── Collapsible glossary ── */
+  #glossary-bar {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    flex-shrink: 0;
+  }
+  #glossary-toggle {
+    width: 100%;
+    text-align: left;
+    background: #21262d;
+    border: none;
+    border-bottom: 1px solid #30363d;
+    color: #8b949e;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 6px 16px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: background 0.12s, color 0.12s;
+  }
+  #glossary-toggle:hover { background: #30363d; color: #c9d1d9; }
+  #glossary-toggle[aria-expanded="true"] { color: #58a6ff; }
+  #glossary-body {
+    display: none;
+    max-height: 36vh;
+    overflow-y: auto;
+    padding: 12px 16px 16px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #b1bac4;
+    border-bottom: 1px solid #21262d;
+  }
+  #glossary-body.open { display: block; }
+  #glossary-body dl { display: grid; grid-template-columns: 160px 1fr; gap: 6px 16px; }
+  #glossary-body dt {
+    color: #79c0ff;
+    font-weight: bold;
+    font-size: 10px;
+    margin: 0;
+  }
+  #glossary-body dd { margin: 0; color: #8b949e; }
+
+  /* ── Per-row Greek micro-bars ── */
+  .book-delta-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 28px;
+  }
+  .book-delta-cell .delta-num { font-size: 10px; color: #56d364; line-height: 1; }
+  .greek-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    height: 12px;
+  }
+  .greek-bars .gb {
+    width: 6px;
+    min-height: 1px;
+    border-radius: 1px;
+    opacity: 0.9;
+    cursor: default;
+    flex-shrink: 0;
+  }
+  .ask .greek-bars .gb:nth-child(1) { background: #79c0ff; }
+  .ask .greek-bars .gb:nth-child(2) { background: #a371f7; }
+  .ask .greek-bars .gb:nth-child(3) { background: #e3b341; }
+  .ask .greek-bars .gb:nth-child(4) { background: #3fb950; }
+  .bid .greek-bars .gb:nth-child(1) { background: #d2a8ff; }
+  .bid .greek-bars .gb:nth-child(2) { background: #a371f7; }
+  .bid .greek-bars .gb:nth-child(3) { background: #e3b341; }
+  .bid .greek-bars .gb:nth-child(4) { background: #56d364; }
+
+  /* Follow-pointer label for Greek bars (clearer than native title tooltip) */
+  #greek-hover-tip {
+    position: fixed;
+    z-index: 400;
+    left: 0;
+    top: 0;
+    padding: 5px 10px;
+    background: #21262d;
+    border: 1px solid #388bfd;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #c9d1d9;
+    font-family: 'Courier New', monospace;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.06s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+  }
+  #greek-hover-tip.visible {
+    opacity: 1;
+    visibility: visible;
+  }
 </style>
 </head>
 <body>
 
 <div id="trade-verdict"></div>
+<div id="greek-hover-tip" aria-live="polite"></div>
 
 <!-- ── HEADER ── -->
 <div id="header">
@@ -326,6 +429,30 @@
     <span class="value" id="spread-display" style="color:#e3b341;">—</span>
   </div>
   <div id="ts-display">—</div>
+</div>
+
+<div id="glossary-bar">
+  <button type="button" id="glossary-toggle" aria-expanded="false" aria-controls="glossary-body">▸ Data field glossary — timestamps, book columns &amp; Greeks</button>
+  <div id="glossary-body">
+    <dl>
+      <dt>timestamp</dt><dd>Exchange or feed time for this snapshot (ISO format). All rows in one snapshot share the same timestamp.</dd>
+      <dt>Side</dt><dd>Whether the row is an <strong>Ask</strong> (sell interest) or <strong>Bid</strong> (buy interest) at that futures price level.</dd>
+      <dt>future_strike</dt><dd>ES futures price level for this order-book row (the ladder price you see in the simulator).</dd>
+      <dt>MBO</dt><dd>Market-by-order depth: a list of sizes at this level. The app sums these values to show total quantity at the price.</dd>
+      <dt>MBO_pulling_stacking</dt><dd>Flow metric describing whether liquidity is being added (stacking) or removed (pulling) at the level; useful for order-flow analysis.</dd>
+      <dt>current_es_price</dt><dd>Underlying ES futures reference price from the feed (stored in ticks in the CSV; the server converts to dollars for display).</dd>
+      <dt>spx_strike</dt><dd>SPX strike used when computing option sensitivities for this futures level (aligned strike in the equity index options chain).</dd>
+      <dt>t</dt><dd>Time to expiration in years for the options used in the Greek calculations (year fraction).</dd>
+      <dt>spx_price</dt><dd>Spot level of the S&amp;P 500 index at this snapshot, used as the underlying for the option model.</dd>
+      <dt>call_delta … call_vega</dt><dd>First-order sensitivities of the <strong>call</strong> option price: delta (underlying), gamma (curvature), theta (time decay per day), vega (implied-vol), rho (rates), plus higher-order terms below.</dd>
+      <dt>call_charm</dt><dd>Sensitivity of delta to the passage of time (also called delta decay).</dd>
+      <dt>call_rho</dt><dd>Sensitivity of option value to interest rates.</dd>
+      <dt>call_vanna</dt><dd>Sensitivity of delta to implied volatility (cross derivative of spot and vol).</dd>
+      <dt>call_vomma</dt><dd>Sensitivity of vega to implied volatility (vol-of-vol).</dd>
+      <dt>put_charm … put_vomma</dt><dd>Same Greek families for the <strong>put</strong> at the matching SPX strike. Put delta is negative; other signs follow the model.</dd>
+    </dl>
+    <p style="margin-top:10px;color:#484f58;font-size:10px;">Order book: four bars under each δ are Δ, Γ, Θ, V (call on asks, put on bids). Heights use <strong>min–max scaling across the 20 visible rows</strong> per Greek—so you see <em>relative</em> change across the ladder, not raw size (adjacent strikes are often numerically close). <strong>Hover a single bar</strong> for that Greek’s name and value. If a Greek is almost flat across those rows, bars stay similar—that reflects the data.</p>
+  </div>
 </div>
 
 <!-- ── MAIN ── -->
@@ -375,9 +502,9 @@
     <div class="panel-title">Order Book — ES Futures</div>
     <div class="book-header">
       <span>Bid Qty</span>
-      <span>Bid δ</span>
+      <span>Bid δ + Greeks</span>
       <span>Price</span>
-      <span>Ask δ</span>
+      <span>Ask δ + Greeks</span>
       <span style="text-align:right;">Ask Qty</span>
     </div>
     <div id="book-container">
@@ -396,6 +523,10 @@
       <div class="greek-row"><span class="gname">Gamma</span><span class="gcall" id="g-cg">—</span><span class="gput" id="g-pg">—</span></div>
       <div class="greek-row"><span class="gname">Theta</span><span class="gcall" id="g-ct">—</span><span class="gput" id="g-pt">—</span></div>
       <div class="greek-row"><span class="gname">Vega</span><span class="gcall" id="g-cv">—</span><span class="gput" id="g-pv">—</span></div>
+      <div class="greek-row"><span class="gname">Rho</span><span class="gcall" id="g-cr">—</span><span class="gput" id="g-pr">—</span></div>
+      <div class="greek-row"><span class="gname">Charm</span><span class="gcall" id="g-cch">—</span><span class="gput" id="g-pch">—</span></div>
+      <div class="greek-row"><span class="gname">Vanna</span><span class="gcall" id="g-cva">—</span><span class="gput" id="g-pva">—</span></div>
+      <div class="greek-row"><span class="gname">Vomma</span><span class="gcall" id="g-cvo">—</span><span class="gput" id="g-pvo">—</span></div>
     </div>
 
     <div class="panel-title">ES Price History</div>
@@ -447,9 +578,70 @@ let chartPrices = [];
 let chartCurrentIdx = 0;
 
 // ─────────────────────────────────────────────────────
+// Greek bar hover label (format: "Delta: 0.4584")
+// ─────────────────────────────────────────────────────
+function bindGreekBarHoverTip() {
+  const host = document.getElementById('book-container');
+  const tip = document.getElementById('greek-hover-tip');
+  if (!host || !tip || host.dataset.greekTipBound) return;
+  host.dataset.greekTipBound = '1';
+
+  function place(clientX, clientY) {
+    const pad = 14;
+    tip.style.left = `${clientX + pad}px`;
+    tip.style.top = `${clientY + pad}px`;
+    requestAnimationFrame(() => {
+      const r = tip.getBoundingClientRect();
+      let x = clientX + pad;
+      let y = clientY + pad;
+      if (r.right > window.innerWidth - 8) x = clientX - r.width - pad;
+      if (r.bottom > window.innerHeight - 8) y = clientY - r.height - pad;
+      tip.style.left = `${Math.max(8, x)}px`;
+      tip.style.top = `${Math.max(8, y)}px`;
+    });
+  }
+
+  host.addEventListener('pointerover', (e) => {
+    const gb = e.target.closest('.gb');
+    if (!gb || !host.contains(gb)) return;
+    const msg = gb.getAttribute('data-tip');
+    if (!msg) return;
+    tip.textContent = msg;
+    tip.classList.add('visible');
+    place(e.clientX, e.clientY);
+  });
+  host.addEventListener('pointermove', (e) => {
+    if (!tip.classList.contains('visible')) return;
+    place(e.clientX, e.clientY);
+  });
+  host.addEventListener('pointerout', (e) => {
+    const gb = e.target.closest('.gb');
+    if (!gb || !host.contains(gb)) return;
+    const rel = e.relatedTarget;
+    if (rel && host.contains(rel) && rel.closest && rel.closest('.gb')) return;
+    tip.classList.remove('visible');
+  });
+  host.addEventListener('pointerleave', () => {
+    tip.classList.remove('visible');
+  });
+}
+
+// ─────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────
 async function init() {
+  bindGreekBarHoverTip();
+
+  const glossaryBtn = document.getElementById('glossary-toggle');
+  const glossaryBody = document.getElementById('glossary-body');
+  const glossaryTitle = glossaryBtn.textContent.replace(/^[▸▾]\s*/, '');
+  glossaryBtn.addEventListener('click', () => {
+    const open = !glossaryBody.classList.contains('open');
+    glossaryBody.classList.toggle('open', open);
+    glossaryBtn.setAttribute('aria-expanded', open);
+    glossaryBtn.textContent = (open ? '▾ ' : '▸ ') + glossaryTitle;
+  });
+
   const levelsData = await fetch('/api/levels').then(r => r.json());
   const levels = levelsData.levels;
 
@@ -529,6 +721,61 @@ function formatTs(ts) {
 // ─────────────────────────────────────────────────────
 // Order Book Rendering
 // ─────────────────────────────────────────────────────
+/** Per-metric min/max across visible rows — bar height encodes where this row sits in that range (not absolute magnitude). */
+function minMaxPerMetric(rows, keys) {
+  return keys.map(k => {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const r of rows) {
+      const v = Number(r[k]);
+      if (!Number.isFinite(v)) continue;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    if (min === Infinity) return { min: 0, max: 0 };
+    return { min, max };
+  });
+}
+
+function escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/** Readable number for native tooltip on each Greek bar */
+function fmtGreekTooltipValue(v) {
+  if (!Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a >= 10) return v.toFixed(3);
+  if (a >= 1) return v.toFixed(4);
+  if (a >= 0.1) return v.toFixed(5);
+  return v.toFixed(6);
+}
+
+function greekBarHeight(v, min, max, hMax) {
+  if (!Number.isFinite(v)) return 2;
+  if (max === min || !Number.isFinite(min) || !Number.isFinite(max)) return Math.round(hMax / 2);
+  const t = (v - min) / (max - min);
+  const clamped = Math.max(0, Math.min(1, t));
+  return 2 + Math.round(clamped * (hMax - 2));
+}
+
+function greekBarsHtml(row, side, ranges) {
+  const keys = side === 'ask' ? ['cd', 'cg', 'ct', 'cv'] : ['pd', 'pg', 'pt', 'pv'];
+  const names = ['Delta', 'Gamma', 'Theta', 'Vega'];
+  const hMax = 11;
+  const heights = keys.map((k, i) => {
+    const v = Number(row[k]);
+    const { min, max } = ranges[i];
+    return greekBarHeight(v, min, max, hMax);
+  });
+  const bars = keys.map((k, i) => {
+    const v = Number(row[k]);
+    const tip = `${names[i]}: ${fmtGreekTooltipValue(v)}`;
+    return `<span class="gb" style="height:${heights[i]}px" data-tip="${escAttr(tip)}"></span>`;
+  }).join('');
+  return `<div class="greek-bars">${bars}</div>`;
+}
+
 function renderBook(data) {
   const container = document.getElementById('book-rows');
   const asks = data.asks.slice(0, 30);   // lowest 30 ask prices
@@ -540,18 +787,24 @@ function renderBook(data) {
     1
   );
 
+  const askSlice = asks.slice(0, 20);
+  const bidSlice = bids.slice(0, 20);
+  const askRanges = minMaxPerMetric(askSlice, ['cd', 'cg', 'ct', 'cv']);
+  const bidRanges = minMaxPerMetric(bidSlice, ['pd', 'pg', 'pt', 'pv']);
+
   let html = '';
 
   // Ask side: show top 20 asks in REVERSE order (highest first at top, lowest near mid)
-  const askDisplay = asks.slice(0, 20).reverse();
+  const askDisplay = askSlice.slice().reverse();
   for (const row of askDisplay) {
     const barW = Math.round((row.q / maxQty) * 70);
-    const deltaStr = row.cd ? row.cd.toFixed(3) : '—';
+    const deltaStr = row.cd != null && row.cd !== '' ? Number(row.cd).toFixed(3) : '—';
+    const deltaCell = `<div class="book-delta book-delta-cell"><span class="delta-num">${deltaStr}</span>${greekBarsHtml(row, 'ask', askRanges)}</div>`;
     html += `
       <div class="book-row ask${selectedPrice === row.s && selectedSide === 'ask' ? ' selected-row' : ''}"
            onclick="selectPrice(${row.s}, 'ask')">
         <div class="book-qty-bar" style="justify-content:flex-start;"></div>
-        <div class="book-delta">${deltaStr}</div>
+        ${deltaCell}
         <div class="book-price">${row.s.toFixed(2)}</div>
         <div class="book-qty">${row.q}</div>
         <div class="book-qty-bar" style="justify-content:flex-start;">
@@ -568,9 +821,10 @@ function renderBook(data) {
   html += `<div class="book-row mid-marker"><span class="mid-spread">── MID ${mid}  ·  ${spreadTicks} ticks ──</span></div>`;
 
   // Bid side: top 20 bids descending (highest at top)
-  for (const row of bids.slice(0, 20)) {
+  for (const row of bidSlice) {
     const barW = Math.round((row.q / maxQty) * 70);
-    const deltaStr = row.pd ? row.pd.toFixed(3) : '—';
+    const deltaStr = row.pd != null && row.pd !== '' ? Number(row.pd).toFixed(3) : '—';
+    const deltaCell = `<div class="book-delta book-delta-cell"><span class="delta-num">${deltaStr}</span>${greekBarsHtml(row, 'bid', bidRanges)}</div>`;
     html += `
       <div class="book-row bid${selectedPrice === row.s && selectedSide === 'bid' ? ' selected-row' : ''}"
            onclick="selectPrice(${row.s}, 'bid')">
@@ -579,7 +833,7 @@ function renderBook(data) {
         </div>
         <div class="book-qty">${row.q}</div>
         <div class="book-price">${row.s.toFixed(2)}</div>
-        <div class="book-delta">${deltaStr}</div>
+        ${deltaCell}
         <div class="book-qty-bar" style="justify-content:flex-end;"></div>
       </div>`;
   }
@@ -591,36 +845,66 @@ function selectPrice(price, side) {
   selectedPrice = price;
   selectedSide = side;
   document.getElementById('selected-price').textContent = price.toFixed(2) + (side === 'ask' ? ' (Ask)' : ' (Bid)');
-  // Re-render to show selection highlight
-  if (currentSnap) renderBook(currentSnap);
+  if (currentSnap) {
+    renderBook(currentSnap);
+    updateGreeks(currentSnap);
+  }
 }
 
 // ─────────────────────────────────────────────────────
 // Greeks
 // ─────────────────────────────────────────────────────
+function findBookRow(data, price, side) {
+  if (price == null || side == null) return null;
+  const list = side === 'ask' ? data.asks : data.bids;
+  return list.find(r => r.s === price) || null;
+}
+
+function fmtGreek(val, decimals) {
+  if (val == null || val === '' || Number.isNaN(Number(val))) return '—';
+  return Number(val).toFixed(decimals);
+}
+
 function updateGreeks(data) {
-  // Use ATM ask row (first ask closest to ES price)
-  const esPrice = data.es_price;
-  let best = null;
-  let bestDist = Infinity;
+  let row = null;
+  let labelSuffix = '';
 
-  for (const row of data.asks) {
-    const d = Math.abs(row.s - esPrice);
-    if (d < bestDist) { bestDist = d; best = row; }
+  if (selectedPrice != null && selectedSide) {
+    row = findBookRow(data, selectedPrice, selectedSide);
+    if (row) labelSuffix = ' · selected';
   }
 
-  if (best) {
-    document.getElementById('greeks-strike').textContent = `@ ${best.s.toFixed(2)}`;
-    document.getElementById('g-cd').textContent = best.cd.toFixed(4);
-    document.getElementById('g-cg').textContent = best.cg.toFixed(6);
-    document.getElementById('g-ct').textContent = best.ct.toFixed(4);
-    document.getElementById('g-cv').textContent = best.cv.toFixed(4);
-    document.getElementById('g-pd').textContent = best.pd.toFixed(4);
-    // put gamma same as call gamma (model symmetry)
-    document.getElementById('g-pg').textContent = best.cg.toFixed(6);
-    document.getElementById('g-pt').textContent = best.pt.toFixed(4);
-    document.getElementById('g-pv').textContent = best.pv.toFixed(4);
+  if (!row) {
+    const esPrice = data.es_price;
+    let bestDist = Infinity;
+    for (const r of data.asks) {
+      const d = Math.abs(r.s - esPrice);
+      if (d < bestDist) { bestDist = d; row = r; }
+    }
+    if (row) labelSuffix = ' · nearest ask to ES';
   }
+
+  if (!row) return;
+
+  document.getElementById('greeks-strike').textContent = `@ ${row.s.toFixed(2)}${labelSuffix}`;
+
+  document.getElementById('g-cd').textContent = fmtGreek(row.cd, 4);
+  document.getElementById('g-cg').textContent = fmtGreek(row.cg, 6);
+  document.getElementById('g-ct').textContent = fmtGreek(row.ct, 4);
+  document.getElementById('g-cv').textContent = fmtGreek(row.cv, 4);
+  document.getElementById('g-cr').textContent = fmtGreek(row.cr, 4);
+  document.getElementById('g-cch').textContent = fmtGreek(row.cch, 6);
+  document.getElementById('g-cva').textContent = fmtGreek(row.cva, 4);
+  document.getElementById('g-cvo').textContent = fmtGreek(row.cvo, 4);
+
+  document.getElementById('g-pd').textContent = fmtGreek(row.pd, 4);
+  document.getElementById('g-pg').textContent = fmtGreek(row.pg != null ? row.pg : row.cg, 6);
+  document.getElementById('g-pt').textContent = fmtGreek(row.pt, 4);
+  document.getElementById('g-pv').textContent = fmtGreek(row.pv, 4);
+  document.getElementById('g-pr').textContent = fmtGreek(row.pr, 4);
+  document.getElementById('g-pch').textContent = fmtGreek(row.pch, 6);
+  document.getElementById('g-pva').textContent = fmtGreek(row.pva, 4);
+  document.getElementById('g-pvo').textContent = fmtGreek(row.pvo, 4);
 }
 
 // ─────────────────────────────────────────────────────
