@@ -66,6 +66,9 @@ def load_data(csv_path):
             entry = {
                 's': strike,          # strike / price level
                 'q': round(qty, 1),   # quantity
+                'ps': safe_float('MBO_pulling_stacking'),
+                'spx': safe_float('spx_strike'),
+                't': safe_float('t'),
                 'cd': safe_float('call_delta'),
                 'cg': safe_float('call_gamma'),
                 'ct': safe_float('call_theta'),

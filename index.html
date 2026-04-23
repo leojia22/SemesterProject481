@@ -84,6 +84,7 @@
     transition: background 0.1s;
     min-height: 30px;
     border-bottom: 1px solid #0d1117;
+    position: relative;
   }
   .book-row:hover { background: #1c2128; }
   .book-row.ask { background: rgba(248, 81, 73, 0.04); }
@@ -402,6 +403,73 @@
     opacity: 1;
     visibility: visible;
   }
+
+  /* ── Expand button on each book row ── */
+  .expand-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: 1px solid transparent;
+    color: #484f58;
+    font-size: 10px;
+    width: 15px;
+    height: 15px;
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: inherit;
+    z-index: 2;
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+  }
+  .expand-btn:hover { color: #58a6ff; border-color: #30363d; background: #1c2128; }
+
+  /* ── Inline detail panel ── */
+  .book-detail-row {
+    background: #0d1422;
+    border-top: 1px solid #1f3858;
+    border-bottom: 1px solid #1f3858;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 14px;
+    font-size: 11px;
+  }
+  .detail-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    border-right: 1px solid #21262d;
+    padding-right: 12px;
+  }
+  .detail-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .detail-meta-label { color: #8b949e; font-size: 10px; }
+  .detail-meta-value { color: #c9d1d9; font-weight: bold; }
+  .ps-badge {
+    padding: 2px 7px; border-radius: 10px;
+    font-size: 10px; font-weight: bold; display: inline-block;
+  }
+  .ps-stack { background: rgba(63,185,80,0.15); color: #3fb950; border: 1px solid rgba(63,185,80,0.35); }
+  .ps-pull  { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.35); }
+  .ps-flat  { background: rgba(139,148,158,0.15); color: #8b949e; border: 1px solid rgba(139,148,158,0.35); }
+  .detail-greeks-tbl { width: 100%; border-collapse: collapse; }
+  .detail-greeks-tbl th {
+    color: #8b949e; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+    text-align: right; padding: 0 4px 3px; border-bottom: 1px solid #21262d; font-weight: normal;
+  }
+  .detail-greeks-tbl th:first-child { text-align: left; }
+  .detail-greeks-tbl td { padding: 1px 4px; border-bottom: 1px solid #0d1117; font-size: 10px; }
+  .detail-greeks-tbl td:first-child { color: #8b949e; }
+  .detail-greeks-tbl td:nth-child(2) { color: #79c0ff; text-align: right; }
+  .detail-greeks-tbl td:nth-child(3) { color: #d2a8ff; text-align: right; }
 </style>
 </head>
 <body>
@@ -573,9 +641,63 @@ let trades = [];
 let playTimer = null;
 let isPlaying = false;
 
+let expandedRows = new Set(); // keys: `${side}-${price}`
+
 // Chart state
 let chartPrices = [];
 let chartCurrentIdx = 0;
+
+// ─────────────────────────────────────────────────────
+// Expandable row detail panel
+// ─────────────────────────────────────────────────────
+function toggleExpand(price, side, event) {
+  event.stopPropagation();
+  const key = `${side}-${price}`;
+  if (expandedRows.has(key)) expandedRows.delete(key);
+  else expandedRows.add(key);
+  if (currentSnap) renderBook(currentSnap);
+}
+
+function detailRowHtml(row, side, midPrice) {
+  const distTicks = midPrice != null ? ((row.s - midPrice) / 0.25) : null;
+  const distStr = distTicks != null
+    ? (distTicks >= 0 ? `+${distTicks.toFixed(1)}` : distTicks.toFixed(1)) + ' ticks'
+    : '—';
+  const dte = row.t ? (row.t * 365).toFixed(1) + 'd' : '—';
+  const spx = row.spx ? row.spx.toFixed(0) : '—';
+
+  let psHtml;
+  if (row.ps > 0)       psHtml = `<span class="ps-badge ps-stack">▲ Stacking +${row.ps.toFixed(2)}</span>`;
+  else if (row.ps < 0)  psHtml = `<span class="ps-badge ps-pull">▼ Pulling ${row.ps.toFixed(2)}</span>`;
+  else                  psHtml = `<span class="ps-badge ps-flat">— Flat</span>`;
+
+  const greeks = [
+    ['Delta', row.cd, row.pd, 4],
+    ['Gamma', row.cg, row.pg, 6],
+    ['Theta', row.ct, row.pt, 4],
+    ['Vega',  row.cv, row.pv, 4],
+    ['Rho',   row.cr, row.pr, 4],
+    ['Charm', row.cch, row.pch, 6],
+    ['Vanna', row.cva, row.pva, 4],
+    ['Vomma', row.cvo, row.pvo, 4],
+  ];
+  const gRows = greeks.map(([name, c, p, d]) =>
+    `<tr><td>${name}</td><td>${fmtGreek(c, d)}</td><td>${fmtGreek(p, d)}</td></tr>`
+  ).join('');
+
+  return `<div class="book-detail-row">
+    <div class="detail-meta">
+      <div class="detail-meta-row"><span class="detail-meta-label">SPX Strike</span><span class="detail-meta-value">${spx}</span></div>
+      <div class="detail-meta-row"><span class="detail-meta-label">DTE</span><span class="detail-meta-value">${dte}</span></div>
+      <div class="detail-meta-row"><span class="detail-meta-label">Dist from Mid</span><span class="detail-meta-value">${distStr}</span></div>
+      <div class="detail-meta-row"><span class="detail-meta-label">Flow</span>${psHtml}</div>
+    </div>
+    <table class="detail-greeks-tbl">
+      <thead><tr><th>Greek</th><th>Call</th><th>Put</th></tr></thead>
+      <tbody>${gRows}</tbody>
+    </table>
+  </div>`;
+}
 
 // ─────────────────────────────────────────────────────
 // Greek bar hover label (format: "Delta: 0.4584")
@@ -663,6 +785,7 @@ async function switchLevel(level) {
   trades = [];
   selectedPrice = null;
   selectedSide = null;
+  expandedRows.clear();
   document.getElementById('trade-log').innerHTML = '';
   document.getElementById('close-btn').disabled = true;
   document.getElementById('selected-price').textContent = 'click order book';
@@ -800,6 +923,8 @@ function renderBook(data) {
     const barW = Math.round((row.q / maxQty) * 70);
     const deltaStr = row.cd != null && row.cd !== '' ? Number(row.cd).toFixed(3) : '—';
     const deltaCell = `<div class="book-delta book-delta-cell"><span class="delta-num">${deltaStr}</span>${greekBarsHtml(row, 'ask', askRanges)}</div>`;
+    const askKey = `ask-${row.s}`;
+    const askExpanded = expandedRows.has(askKey);
     html += `
       <div class="book-row ask${selectedPrice === row.s && selectedSide === 'ask' ? ' selected-row' : ''}"
            onclick="selectPrice(${row.s}, 'ask')">
@@ -810,7 +935,9 @@ function renderBook(data) {
         <div class="book-qty-bar" style="justify-content:flex-start;">
           <div class="qty-bar-fill" style="width:${barW}px;"></div>
         </div>
+        <button class="expand-btn" style="left:4px" onclick="toggleExpand(${row.s},'ask',event)">${askExpanded ? '▾' : '▸'}</button>
       </div>`;
+    if (askExpanded) html += detailRowHtml(row, 'ask', data.mid_price);
   }
 
   // Mid marker
@@ -825,6 +952,8 @@ function renderBook(data) {
     const barW = Math.round((row.q / maxQty) * 70);
     const deltaStr = row.pd != null && row.pd !== '' ? Number(row.pd).toFixed(3) : '—';
     const deltaCell = `<div class="book-delta book-delta-cell"><span class="delta-num">${deltaStr}</span>${greekBarsHtml(row, 'bid', bidRanges)}</div>`;
+    const bidKey = `bid-${row.s}`;
+    const bidExpanded = expandedRows.has(bidKey);
     html += `
       <div class="book-row bid${selectedPrice === row.s && selectedSide === 'bid' ? ' selected-row' : ''}"
            onclick="selectPrice(${row.s}, 'bid')">
@@ -835,7 +964,9 @@ function renderBook(data) {
         <div class="book-price">${row.s.toFixed(2)}</div>
         ${deltaCell}
         <div class="book-qty-bar" style="justify-content:flex-end;"></div>
+        <button class="expand-btn" style="right:4px" onclick="toggleExpand(${row.s},'bid',event)">${bidExpanded ? '▾' : '▸'}</button>
       </div>`;
+    if (bidExpanded) html += detailRowHtml(row, 'bid', data.mid_price);
   }
 
   container.innerHTML = html;
