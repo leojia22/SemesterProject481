@@ -200,8 +200,9 @@ def main():
         Handler.all_levels[name] = load_data(os.path.join(DATA_DIR, fname))
         Handler.level_names.append(name)
 
-    server = HTTPServer(('localhost', PORT), Handler)
-    print(f"\n  Trade Simulator running → http://localhost:{PORT}\n", flush=True)
+    port = int(os.environ.get("PORT", 8081))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    print(f"\n  Trade Simulator running", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
