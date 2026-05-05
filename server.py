@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import sys
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -193,16 +194,21 @@ class Handler(BaseHTTPRequestHandler):
         pass  # suppress access logs
 
 
-def main():
+def load_all_data():
     csv_files = sorted(f for f in os.listdir(DATA_DIR) if f.endswith('.csv'))
     for fname in csv_files:
-        name = fname[:-4]  # strip .csv
+        name = fname[:-4]
         Handler.all_levels[name] = load_data(os.path.join(DATA_DIR, fname))
         Handler.level_names.append(name)
 
+
+def main():
     port = int(os.environ.get("PORT", 8081))
     server = HTTPServer(('0.0.0.0', port), Handler)
-    print(f"\n  Trade Simulator running", flush=True)
+    print(f"\n  Trade Simulator running on port {port}", flush=True)
+
+    threading.Thread(target=load_all_data, daemon=True).start()
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:
